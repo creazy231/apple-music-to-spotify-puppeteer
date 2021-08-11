@@ -16,9 +16,7 @@ const config = {
 (async () => {
 	const spinner = ora('Fetching Songs from Apple Playlist').start();
 	const browser = await puppeteer.launch({
-		headless: true,
-		executablePath: process.env.CHROME_BIN || null,
-		args: ['--no-sandbox', '--headless', '--disable-gpu', '--disable-dev-shm-usage', '--single-process']
+		// headless: false
 	});
 	const page = await browser.newPage();
 	await page.goto(config.APPLE_PLAYLIST_URL);
@@ -63,16 +61,8 @@ const config = {
 					type: 'track',
 				}
 			});
-			try {
-				song.url = data.tracks.items[0].external_urls.spotify;
-			} catch (e) {
-				song.url = undefined;
-			}
-			try {
-				song.uri = data.tracks.items[0].uri;
-			} catch (e) {
-				song.uri = undefined;
-			}
+			song.url = data.tracks?.items[0]?.external_urls.spotify;
+			song.uri = data.tracks?.items[0]?.uri;
 			await new Promise(r => setTimeout(r, 100));
 			progress.update(index + 1);
 		} catch (e) {
