@@ -14,9 +14,17 @@ const config = {
 };
 
 (async () => {
-	const spinner = ora('Fetching Songs from Apple Playlist').start();
+	let spinner;
+
+	spinner = ora('Fetching Songs from Apple Playlist').start();
 	const browser = await puppeteer.launch({
-		// headless: false
+		headless: false,
+		args: [
+			// "--disable-gpu",
+			// "--disable-dev-shm-usage",
+			// "--disable-setuid-sandbox",
+			// "--no-sandbox",
+		]
 	});
 	const page = await browser.newPage();
 	await page.goto(config.APPLE_PLAYLIST_URL);
@@ -52,17 +60,22 @@ const config = {
 	progress.start(songs.length, 0);
 	for (let [index, song] of songs.entries()) {
 		try {
-			const {data} = await axios.get(`https://api.spotify.com/v1/search`, {
-				headers: {
-					'Authorization': `Bearer ${config.OAUTH_TOKEN}`
-				},
-				params: {
-					q: `${song.title.replace(/ *\([^)]*\) */g, "")} ${song.artist}`,
-					type: 'track',
-				}
-			});
-			song.url = data.tracks?.items[0]?.external_urls.spotify;
-			song.uri = data.tracks?.items[0]?.uri;
+			async function getSongsFromSpotify(withoutBraces = false) {
+				const {data} = await axios.get(`https://api.spotify.com/v1/search`, {
+					headers: {
+						'Authorization': `Bearer ${config.OAUTH_TOKEN}`
+					},
+					params: {
+						q: !withoutBraces ? `${song.title} ${song.artist}` : `${song.title.replace(/ *\([^)]*\) */g, "")} ${song.artist}`,
+						type: 'track',
+					}
+				});
+				return data;
+			}
+			let data = await getSongsFromSpotify();
+			if (!data.tracks.items.length) data = await getSongsFromSpotify(true);
+			song.url = data.tracks.items[0]?.external_urls.spotify;
+			song.uri = data.tracks.items[0]?.uri;
 			await new Promise(r => setTimeout(r, 100));
 			progress.update(index + 1);
 		} catch (e) {
@@ -73,9 +86,10 @@ const config = {
 	await fs.writeFileSync('songs.json', JSON.stringify(songs));
 
 	progress.stop();
-	console.log(`✔ ${songs.length} Songs fetched`);
+	ora(`${songs.length} Songs fetched from Spotify`).start().succeed();
 
 	// GET PLAYLIST
+	spinner = ora(`Deleting Songs from Spotify Playlist`).start();
 	let playlistItems = [];
 	let check = true;
 	while (check) {
@@ -94,8 +108,6 @@ const config = {
 		}
 		playlistItems = [...playlistItems, ...playlist.items];
 	}
-
-	console.log(`✔ ${playlistItems.length} Songs deleted from Playlist`);
 
 	let tracksToRemoveChunk = [];
 	for (const item of playlistItems) {
@@ -121,8 +133,12 @@ const config = {
 		});
 	}
 
+	spinner.text = `${playlistItems.length} Songs deleted from Spotify Playlist`;
+	spinner.succeed();
+
 
 	// ADD SONGS TO PLAYLIST
+	spinner = ora(`Adding fetched Songs to Spotify Playlist`).start();
 	let songsChunk = songs.map(s => {
 		return s.uri;
 	});
@@ -149,7 +165,8 @@ const config = {
 		});
 	}
 
-	console.log(`✔ ${songsToAddCount} Songs added to Playlist`);
+	spinner.text = `${songsToAddCount} Songs added to Spotify Playlist`;
+	spinner.succeed();
 })();
 
 async function autoScroll(page) {
