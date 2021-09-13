@@ -17,14 +17,16 @@ const config = {
 	let spinner;
 
 	spinner = ora('Fetching Songs from Apple Playlist').start();
+
+	const args = process.env.NODE_ENV === 'production' ? [
+		"--disable-gpu",
+		"--disable-dev-shm-usage",
+		"--disable-setuid-sandbox",
+	] : [];
+
 	const browser = await puppeteer.launch({
 		headless: false,
-		args: [
-			// "--disable-gpu",
-			// "--disable-dev-shm-usage",
-			// "--disable-setuid-sandbox",
-			// "--no-sandbox",
-		]
+		args,
 	});
 	const page = await browser.newPage();
 	await page.goto(config.APPLE_PLAYLIST_URL);
